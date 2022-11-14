@@ -36,6 +36,7 @@ let
         done
       '';
     };
+
   top = rec {
     /*
     It contains the builder for different nvidia configuration, parametrized by
@@ -48,12 +49,40 @@ let
           name = "nvidia-x11-${version}-nixGL";
           inherit version;
           src = let
-            url =
-              "https://download.nvidia.com/XFree86/Linux-x86_64/${version}/NVIDIA-Linux-x86_64-${version}.run";
+            xFreeUrl = "https://download.nvidia.com/XFree86/Linux-x86_64/${version}/NVIDIA-Linux-x86_64-${version}.run";
+            teslaUrl = "https://us.download.nvidia.com/tesla/${version}/NVIDIA-Linux-x86_64-${version}.run";
+            urls = [ xFreeUrl teslaUrl ];
+
+            # Repo flathub/org.freedesktop.Platform.GL.nvidia provides some drivers with their sha256sum, size and download url
+            flatSrc =
+              let
+                # Return first element in list `li` , or null if the list is null or empty
+                firstOrNull = li: if isNull li || builtins.length li == 0 then "" else (builtins.elemAt li 0);
+
+                # metadata file may not exist if our version is not in versions.sh
+                flatVersions = builtins.readFile
+                  (builtins.fetchurl "https://raw.github.com/flathub/org.freedesktop.Platform.GL.nvidia/master/versions.sh");
+                found = (builtins.match ".+${lib.strings.escapeRegex version}.+" flatVersions) != null;
+
+                flatMetadata = if found then builtins.readFile
+                    (builtins.fetchurl "https://raw.github.com/flathub/org.freedesktop.Platform.GL.nvidia/master/data/nvidia-${version}-x86_64.data")
+                  else "";
+                url = firstOrNull (builtins.match '':[^:]*:[^:]*:[^:]*:(.*)'' flatMetadata);
+                sha256 = firstOrNull (builtins.match '':([^:]*):[^:]*:[^:]*:.*'' flatMetadata);
+              in
+              if sha256 != null && url != null then
+                fetchurl { inherit url sha256; }
+              else null;
           in if sha256 != null then
-            fetchurl { inherit url sha256; }
+            # If sha256 is provided, use fetchurl from nixpkgs
+            fetchurl { inherit urls sha256; }
+          else if sha256 == null && flatSrc != null then
+            # If sha256 hash is not available, firstly try to use data from flathub
+            flatSrc
           else
-            builtins.fetchurl url;
+            # If flathub does not have such data, fall back to fetchurl method
+            builtins.fetchurl xFreeUrl;
+
           useGLVND = true;
         });
 
