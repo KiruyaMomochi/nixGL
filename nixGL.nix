@@ -91,6 +91,22 @@ let
         kernel = null;
       };
 
+      findSingleExistingPath = paths:
+        lib.findSingle builtins.pathExists
+          (throw "No path found")
+          (throw "More than one path found")
+          paths;
+
+      vkIcdFilenameJson = findSingleExistingPath [
+        "${nvidiaLibsOnly}/share/vulkan/icd.d/nvidia_icd.json"
+        "${nvidiaLibsOnly}/share/vulkan/icd.d/nvidia_icd.x86_64.json"
+      ];
+
+      vkIcdFilenameJson32 = findSingleExistingPath [
+        "${nvidiaLibsOnly.lib32}/share/vulkan/icd.d/nvidia_icd.json"
+        "${nvidiaLibsOnly.lib32}/share/vulkan/icd.d/nvidia_icd.i686.json"
+      ];
+
       nixGLNvidiaBumblebee = writeExecutable {
         name = "nixGLNvidiaBumblebee-${version}";
         text = ''
@@ -132,9 +148,9 @@ let
 
               ${
                 lib.optionalString (api == "Vulkan")
-                ''export VK_ICD_FILENAMES=${nvidiaLibsOnly}/share/vulkan/icd.d/nvidia_icd.x86_64.json${
-                  lib.optionalString enable32bits
-                  ":${nvidiaLibsOnly.lib32}/share/vulkan/icd.d/nvidia_icd.i686.json"
+                ''export VK_ICD_FILENAMES=${vkIcdFilenameJson}${
+                lib.optionalString enable32bits
+                ":${vkIcdFilenameJson32}"
                 }"''${VK_ICD_FILENAMES:+:$VK_ICD_FILENAMES}"''
               }
               export LD_LIBRARY_PATH=${
